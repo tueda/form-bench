@@ -67,11 +67,14 @@ for file in res_files:
    # Extract worker counts from commands
    cpus = []
    for l in commands:
-      if l.startswith("form"):
-         cpus.append(1)
-      elif l.startswith("tform"):
+      if 'tform' in l:
          cpu = re.findall(r"-w(\d+)", l)
-         cpus.append(int(cpu[0]))
+         if cpu:
+            cpus.append(int(cpu[0]))
+         else:
+            cpus.append(1)
+      elif 'form' in l:
+         cpus.append(1)
       else:
          print("Could not determine workers in ", l)
          cpus.append(0)
