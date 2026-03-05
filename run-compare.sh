@@ -98,10 +98,20 @@ for form in $(echo "$FORM_CMDS" | sed -e 's/ -w[0-9]\+//g' -e's/,/ /g'); do
 done
 
 ORIGDIR=$(pwd)
+
+RUN_NUMBER=1
+while :; do
+	RUN_ID=$(printf "%04d" "$RUN_NUMBER")
+	if ! compgen -G "$ORIGDIR/output/$RUN_ID-*" >/dev/null; then
+		break
+	fi
+	RUN_NUMBER=$((RUN_NUMBER + 1))
+done
+
 TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
-RESULTSDIR=$ORIGDIR/output/$LABEL$TIMESTAMP/results/
+RESULTSDIR="$ORIGDIR/output/$RUN_ID-$LABEL$TIMESTAMP/results/"
 echo "Results: $RESULTSDIR"
-LOGDIR=$ORIGDIR/output/$LABEL$TIMESTAMP/logs/
+LOGDIR="$ORIGDIR/output/$RUN_ID-$LABEL$TIMESTAMP/logs/"
 mkdir -p "$RESULTSDIR"
 mkdir -p "$LOGDIR"
 
