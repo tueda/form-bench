@@ -1,0 +1,58 @@
+[project]
+name = "form-bench"
+version = "0.1.0"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "jsonschema>=4.26",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "scipy>=1.17.1",
+    "tabulate>=0.10",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
+]
+
+[tool.ruff]
+target-version = "py311"
+lint.select = [
+    "ALL",
+]
+lint.ignore = [
+    "COM812", # missing-trailing-comma, incompatible with the Ruff formatter
+    "D107",   # undocumented-public-init, unnecessary if the class has a docstring
+    "D203",   # one-blank-line-before-class, incompatible with D211
+    "D213",   # multi-line-summary-second-line, incompatible with D212
+    "EXE003", # shebang-missing-python, uses /bin/sh shebang
+]
+lint.per-file-ignores."scripts/*.py" = [
+    "INP001", # implicit-namespace-package, not a package
+]
+lint.per-file-ignores."test_*.py" = [
+    "S101", # assert, allowed in tests
+]
+
+[tool.pyproject-fmt]
+indent = 4
+
+[tool.pytest]
+ini_options.addopts = [
+    "--cov-report=html",
+    "--cov-report=term",
+    "--doctest-modules",
+]
+
+[tool.mypy]
+pretty = true
+show_error_codes = true
+strict = true
+warn_unreachable = true
