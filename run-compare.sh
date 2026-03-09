@@ -80,6 +80,127 @@ warmup["sort-disk"]=0
 
 ###############################################################################
 
+# If command-line arguments are passed, parse them and override the settings.
+
+error() {
+	echo "error: $*" >&2
+	exit 1
+}
+
+is_positive_int() {
+	[[ $1 =~ ^[1-9][0-9]*$ ]]
+}
+
+require_arg() {
+	[[ $# -ge 2 ]] || error "$1 requires an argument"
+}
+
+require_positive_int_arg() {
+	require_arg "$@"
+	is_positive_int "$2" || error "$1 must be a positive integer"
+}
+
+cmd_n=
+cmd_min_n=
+cmd_max_n=
+cmd_interleave=
+cmd_verbose=
+cmd_tests=()
+cmd_args=()
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+		-n)
+			require_positive_int_arg "$@"
+			cmd_n=$2
+			shift 2
+			;;
+		--min-n)
+			require_positive_int_arg "$@"
+			cmd_min_n=$2
+			shift 2
+			;;
+		--max-n)
+			require_positive_int_arg "$@"
+			cmd_max_n=$2
+			shift 2
+			;;
+		-i|--interleave)
+			cmd_interleave=1
+			shift
+			;;
+		-v|--verbose)
+			cmd_verbose=1
+			shift
+			;;
+		-t|--test)
+			require_arg "$@"
+			cmd_tests+=("$2")
+			shift 2
+			;;
+		-*)
+			error "unknown option: $1"
+			;;
+		*)
+			cmd_args+=("$1")
+			shift
+			;;
+	esac
+done
+
+if [[ -n $cmd_n ]]; then
+	for i in "${!runs[@]}"; do
+		runs[$i]=$cmd_n
+	done
+fi
+
+if [[ -n $cmd_min_n ]]; then
+	for i in "${!runs[@]}"; do
+		if (( ${runs[$i]} < cmd_min_n )); then
+			runs[$i]=$cmd_min_n
+		fi
+	done
+fi
+
+if [[ -n $cmd_max_n ]]; then
+	for i in "${!runs[@]}"; do
+		if (( ${runs[$i]} > cmd_max_n )); then
+			runs[$i]=$cmd_max_n
+		fi
+	done
+fi
+
+if (( ${#cmd_tests[@]} > 0 )); then
+	TESTS="${cmd_tests[*]}"
+fi
+
+if (( ${#cmd_args[@]} > 0 )); then
+	FORM_CMDS=$(IFS=','; echo "${cmd_args[*]}")
+fi
+
+if [[ -n $cmd_interleave ]]; then
+	[[ -n $cmd_n ]] || error "--interleave option requires -n"
+	for i in "${!runs[@]}"; do
+		runs[$i]=1
+	done
+	tmp_form_cmds=$FORM_CMDS
+	for ((i=1; i<cmd_n; i++)); do
+		FORM_CMDS+="${FORM_CMDS:+,}$tmp_form_cmds"
+	done
+fi
+
+if [[ -n $cmd_verbose ]]; then
+	for t in $TESTS; do
+		echo "Test: $t: ${runs[$t]} runs (warmup: ${warmup[$t]})"
+	done
+
+	(
+		IFS=,
+		for c in $FORM_CMDS; do
+			echo "Command: $c"
+		done
+	)
+fi
 
 # Check for python and hyperfine:
 for bin in hyperfine python3; do
