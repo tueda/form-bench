@@ -6,10 +6,13 @@
     ],
     "allowCompoundWords": true,
     "words": [
+        "floatfmt",
         "fmft",
         "FORMTMP",
+        "gmean",
         "minceex",
         "shfmt",
+        "tablefmt",
         "tform"
     ]
 }
