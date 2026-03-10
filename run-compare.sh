@@ -87,12 +87,21 @@ error() {
 	exit 1
 }
 
+is_int() {
+	[[ $1 =~ ^-?[1-9][0-9]*$ ]]
+}
+
 is_positive_int() {
 	[[ $1 =~ ^[1-9][0-9]*$ ]]
 }
 
 require_arg() {
 	[[ $# -ge 2 ]] || error "$1 requires an argument"
+}
+
+require_int_arg() {
+	require_arg "$@"
+	is_int "$2" || error "$1 must be an integer"
 }
 
 require_positive_int_arg() {
@@ -104,6 +113,8 @@ cmd_n=
 cmd_min_n=
 cmd_max_n=
 cmd_interleave=
+cmd_form_tmp=
+cmd_form_tmp_sort=
 cmd_verbose=
 cmd_tests=()
 cmd_args=()
@@ -128,6 +139,31 @@ while [[ $# -gt 0 ]]; do
 		-i|--interleave)
 			cmd_interleave=1
 			shift
+			;;
+		--label)
+			require_arg "$@"
+			LABEL=$2
+			shift 2
+			;;
+		--nice)
+			require_int_arg "$@"
+			NICE=$2
+			shift 2
+			;;
+		--test-dir-base)
+			require_arg "$@"
+			TESTDIRBASE=$2
+			shift 2
+			;;
+		--form-tmp)
+			require_arg "$@"
+			cmd_form_tmp=$2
+			shift 2
+			;;
+		--form-tmp-sort)
+			require_arg "$@"
+			cmd_form_tmp_sort=$2
+			shift 2
 			;;
 		-v|--verbose)
 			cmd_verbose=1
@@ -242,6 +278,13 @@ mkdir "$TESTDIR"
 TMPDIR=$TESTDIR/formtmp
 mkdir "$TMPDIR"
 export FORMTMP=$TMPDIR
+
+if [[ -n $cmd_form_tmp ]]; then
+	export FORMTMP=$cmd_form_tmp
+fi
+if [[ -n $cmd_form_tmp_sort ]]; then
+	export FORMTMPSORT=$cmd_form_tmp_sort
+fi
 
 cp -r "$ORIGDIR"/tests/* "$TESTDIR"
 cd "$TESTDIR"
