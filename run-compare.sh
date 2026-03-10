@@ -261,7 +261,11 @@ for test in $TESTS; do
 		"nice -n $NICE {form} $test.frm > $LOGDIR/$test.log"
 	)
 done
-python3 "$ORIGDIR/scripts/plot-compare.py" "$RESULTSDIR"
+# Skip plot-compare in interleaved mode because it fails for results generated
+# with --runs 1.
+if [[ -z $cmd_interleave ]]; then
+	python3 "$ORIGDIR/scripts/plot-compare.py" "$RESULTSDIR"
+fi
 
 # Clean up
 cd "$ORIGDIR"
