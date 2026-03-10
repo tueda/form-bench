@@ -184,6 +184,19 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+if (( ${#cmd_tests[@]} > 0 )); then
+	TESTS="${cmd_tests[*]}"
+fi
+
+for test in $TESTS; do
+	if [[ -z ${runs[$test]} ]]; then
+		runs[$test]=$(( N * 2 ))
+	fi
+	if [[ -z ${warmup[$test]} ]]; then
+		warmup[$test]=0
+	fi
+done
+
 if [[ -n $cmd_n ]]; then
 	for i in "${!runs[@]}"; do
 		runs[$i]=$cmd_n
@@ -204,10 +217,6 @@ if [[ -n $cmd_max_n ]]; then
 			runs[$i]=$cmd_max_n
 		fi
 	done
-fi
-
-if (( ${#cmd_tests[@]} > 0 )); then
-	TESTS="${cmd_tests[*]}"
 fi
 
 if (( ${#cmd_args[@]} > 0 )); then
