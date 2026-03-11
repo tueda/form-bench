@@ -303,6 +303,27 @@ fi
 cp -r "$ORIGDIR"/tests/* "$TESTDIR"
 cd "$TESTDIR"
 
+# Save the version information for each binary.
+(
+	declare -A bins
+	i=1
+	IFS=','
+	for form in $FORM_CMDS; do
+		# shellcheck disable=SC2001
+		form=$(echo "$form" | sed -e 's/ \+-w[0-9]\+//')
+		if command -v "$form" &>/dev/null; then
+			bin="$(command -v "$form")"
+			if [[ -z ${bins[$bin]} ]]; then
+				bins["$bin"]=1
+				{
+					echo "$bin"
+					"$bin" -vv
+				} >"$RESULTSDIR/version-$i.txt"
+				((i++))
+			fi
+		fi
+	done
+)
 
 for test in $TESTS; do
 	(
