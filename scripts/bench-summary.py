@@ -9,14 +9,15 @@ from __future__ import annotations
 __doc__ = """Summarize benchmark results."""
 
 import argparse
+import dataclasses
+import functools
 import itertools
 import json
 import re
 import shlex
-import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, assert_never
 from warnings import warn
 
@@ -26,7 +27,7 @@ import scipy.stats
 from tabulate import tabulate
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
     from typing import Any, Literal
 
     import numpy.typing as npt
@@ -137,7 +138,7 @@ def ratio_ci(  # noqa: C901, PLR0913
     return ratio, ci
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class Options:
     """Program options."""
 
@@ -147,21 +148,24 @@ class Options:
     precision: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class BenchmarkResults:
     """Benchmark results."""
 
     names: tuple[str, ...]
     commands: tuple[str, ...]
+    command_versions: tuple[str, ...]
     times: tuple[float, ...]
     memory_usage: tuple[int, ...]
     exit_codes: tuple[int, ...]
+    _command_version_map: Mapping[str, str] = dataclasses.field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         """Validate field lengths."""
         lengths = [
             len(self.names),
             len(self.commands),
+            len(self.command_versions),
             len(self.times),
             len(self.memory_usage),
             len(self.exit_codes),
@@ -169,6 +173,17 @@ class BenchmarkResults:
         if len(set(lengths)) > 1:
             msg = f"all fields must have the same length, but got: {lengths}"
             raise ValueError(msg)
+
+        versions: dict[str, str] = {}
+        for cmd, ver in zip(self.commands, self.command_versions, strict=True):
+            if cmd in versions and versions[cmd] != ver:
+                msg = (
+                    f"conflicting versions for command {cmd!r}: "
+                    f"{versions[cmd]!r} vs {ver!r}"
+                )
+                raise ValueError(msg)
+            versions[cmd] = ver
+        object.__setattr__(self, "_command_version_map", MappingProxyType(versions))
 
     def __len__(self) -> int:
         """Return the number of runs."""
@@ -181,6 +196,7 @@ class BenchmarkResults:
         return BenchmarkResults(
             self.names + other.names,
             self.commands + other.commands,
+            self.command_versions + other.command_versions,
             self.times + other.times,
             self.memory_usage + other.memory_usage,
             self.exit_codes + other.exit_codes,
@@ -210,6 +226,10 @@ class BenchmarkResults:
                 return False
         return True
 
+    def command_version(self, command: str) -> str:
+        """Return the version information for the given command."""
+        return self._command_version_map[command]
+
     def query(
         self,
         *,
@@ -230,6 +250,7 @@ class BenchmarkResults:
         return BenchmarkResults(
             tuple(self.names[i] for i in indices),
             tuple(self.commands[i] for i in indices),
+            tuple(self.command_versions[i] for i in indices),
             tuple(self.times[i] for i in indices),
             tuple(self.memory_usage[i] for i in indices),
             tuple(self.exit_codes[i] for i in indices),
@@ -286,12 +307,14 @@ def read_result(file: Path) -> BenchmarkResults:
     jsonschema.validate(data, _get_result_file_schema())
 
     all_commands = []
+    all_command_versions = []
     all_times = []
     all_memory_usage = []
     all_exit_codes = []
 
     for i, result in enumerate(data["results"]):
         command: str = result["command"]
+        command_version = _get_command_version(file, command)
         times: list[float] = result["times"]
         exit_codes: list[int] = result["exit_codes"]
         if "memory_usage_byte" in result:
@@ -309,6 +332,7 @@ def read_result(file: Path) -> BenchmarkResults:
             raise ValueError(msg)
 
         all_commands.extend([command] * len(times))
+        all_command_versions.extend([command_version] * len(times))
         all_times.extend(times)
         all_memory_usage.extend(memory_usage_byte)
         all_exit_codes.extend(exit_codes)
@@ -316,10 +340,42 @@ def read_result(file: Path) -> BenchmarkResults:
     return BenchmarkResults(
         (name,) * len(all_commands),
         tuple(all_commands),
+        tuple(all_command_versions),
         tuple(all_times),
         tuple(all_memory_usage),
         tuple(all_exit_codes),
     )
+
+
+@functools.cache
+def _get_command_versions(directory: Path) -> Mapping[str, str]:
+    result: dict[str, str] = {}
+    for path in sorted(directory.glob("version-*.txt")):
+        if not path.is_file():
+            continue
+
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if not lines:
+            continue
+
+        key = lines[0]
+        value = "\n".join(lines[1:])
+        if key in result and result[key] != value:
+            msg = (
+                f"conflicting versions for command {key!r} in {directory}: "
+                f"{result[key]!r} vs {value!r}"
+            )
+            raise ValueError(msg)
+        result[key] = value
+
+    return MappingProxyType(result)
+
+
+def _get_command_version(file: Path, command: str) -> str:
+    args = shlex.split(command)
+    if not args:
+        return ""
+    return _get_command_versions(file.parent).get(args[0], "")
 
 
 def summarize_results(results: BenchmarkResults, options: Options) -> str:
@@ -341,26 +397,9 @@ def _summarize_commands(results: BenchmarkResults) -> str:
     items = [tab]
 
     for i, c in enumerate(results.unique_commands):
-        try:
-            argv = shlex.split(c)
-            if not argv:
-                continue
-            # Print verbose version information for FORM.
-            cmd = argv[0]
-            if not re.search(r"(?:\b|_)(?:t?[fv]orm|par[fv]orm)(?:\b|_)", cmd):
-                continue
-            p = subprocess.run(  # noqa: S603
-                [cmd, "-vv"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                text=True,
-                timeout=1,
-            )
-            if p.returncode == 0:
-                items.append(f"**{int_to_letter(i)}:**\n```\n{p.stdout.strip()}\n```")
-        except (OSError, ValueError):
-            pass
+        v = results.command_version(c)
+        if v:
+            items.append(f"**{int_to_letter(i)}:**\n```\n{v}\n```")
 
     return "\n\n".join(items)
 
