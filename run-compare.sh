@@ -140,6 +140,11 @@ while [[ $# -gt 0 ]]; do
 			cmd_interleave=1
 			shift
 			;;
+		--difficulty)
+			require_positive_int_arg "$@"
+			export DIFFICULTY=$2
+			shift 2
+			;;
 		--label)
 			require_arg "$@"
 			LABEL=$2
