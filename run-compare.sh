@@ -10,12 +10,14 @@ trap 'echo Cleaning up ; rm -rf $TESTDIR $ORIGDIR/output/$TIMESTAMP' ERR
 # Parallel scaling can be checked by using the same binary with multiple worker
 # counts.
 
-# Configurable parameters:
 
-LABEL="scaling-test-"
+# Configurable parameters: set their default values and then re-set with args
+
+LABEL="scaling-test"
 TESTDIRBASE="/dev/shm/"
-# Negative nice can lead to more consistent timings.
-NICE=-10
+TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
+# Negative nice can lead to more consistent timings if the user has permission.
+NICE=0
 
 FORM_CMDS="\
 form-test,\
@@ -38,7 +40,42 @@ TESTS="trace mincer minceex forcer forcer-exp fmft mbox1l color chromatic sort-s
 N=1
 
 # Run a harder version of the tests? Not all tests are affected by this.
-export DIFFICULTY=1
+DIFFICULTY=1
+
+
+options=$(getopt -o "" -l "label:,testdir:,timestamp:,nice:,form_cmds:,tests:,runs:,difficulty:" -- "$@")
+if [ $? -ne 0 ]; then
+	echo "Error, invalid argument in $@"
+fi
+eval set -- $options
+while :
+do
+	case "$1" in
+		--label)      LABEL="$2"; shift 2 ;;
+		--testdir)    TESTDIRBASE="$2"; shift 2 ;;
+		--timestamp)  TIMESTAMP="$2"; shift 2 ;;
+		--nice)       NICE="$2"; shift 2 ;;
+		--form_cmds)  FORM_CMDS="$2"; shift 2 ;;
+		--tests)      TESTS=$(echo "$2" | sed 's/,/ /g'); shift 2 ;;
+		--runs)       N="$2"; shift 2 ;;
+		--difficulty) DIFFICULTY="$2"; shift 2 ;;
+		--) shift; break ;;
+		*) echo "Error, invalid option: $1" ;;
+	esac
+done
+# this variable needs to be available within form scripts:
+export DIFFICULTY
+
+echo "form-bench: $(git rev-parse HEAD)"
+echo "	LABEL      = $LABEL"
+echo "	TESTDIR    = $TESTDIRBASE"
+echo "	TIMESTAMP  = $TIMESTAMP"
+echo "	NICE       = $NICE"
+echo "	FORM_CMDS  = $FORM_CMDS"
+echo "	TESTS      = $TESTS"
+echo "	N          = $N"
+echo "	DIFFICULTY = $DIFFICULTY"
+
 
 ###############################################################################
 
@@ -98,10 +135,9 @@ for form in $(echo "$FORM_CMDS" | sed -e 's/ -w[0-9]\+//g' -e's/,/ /g'); do
 done
 
 ORIGDIR=$(pwd)
-TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
-RESULTSDIR=$ORIGDIR/output/$LABEL$TIMESTAMP/results/
+RESULTSDIR=$ORIGDIR/output/$LABEL-$TIMESTAMP/results/
 echo "Results: $RESULTSDIR"
-LOGDIR=$ORIGDIR/output/$LABEL$TIMESTAMP/logs/
+LOGDIR=$ORIGDIR/output/$LABEL-$TIMESTAMP/logs/
 mkdir -p "$RESULTSDIR"
 mkdir -p "$LOGDIR"
 
