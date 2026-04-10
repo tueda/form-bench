@@ -142,7 +142,7 @@ mkdir -p "$RESULTSDIR"
 mkdir -p "$LOGDIR"
 
 TESTDIR="$TESTDIRBASE/form-bench-$TIMESTAMP/"
-mkdir "$TESTDIR"
+mkdir -p "$TESTDIR"
 
 TMPDIR=$TESTDIR/formtmp
 mkdir "$TMPDIR"
