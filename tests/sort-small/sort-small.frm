@@ -2,7 +2,7 @@
 
 * Run a sort which fits in the small buffer. Don't create any large patches.
 * TFORM default TermsInSmall is 3M
-#: TermsInSmall 19M
+#: TermsInSmall 9M
 #: SmallSize 6G
 #: LargeSize 100M
 #: ScratchSize 100M
