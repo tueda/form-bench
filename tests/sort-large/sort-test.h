@@ -2,11 +2,10 @@
 * cancel. Keep "distance" between the cancelling terms, such that they only
 * cancel in later stages of the merging.
 
-* With the default buffer sizes, FORM keeps 2M (~2^21) terms in the small buffer.
-* We generate NTERMS*BLOWUP terms in total.
+* With the default buffer sizes and no padding, FORM keeps 2M (~2^21) terms in
+* the small buffer. We generate NTERMS*BLOWUP terms in total.
 
 CFunction f,g,sum;
-CFunction g1,...,g10;
 Symbol n,x,y;
 
 #ifndef `BLOWUP'
@@ -42,7 +41,9 @@ Identify f(x?) = f(x)
 	;
 * Make the terms bigger, to consume more disk space?
 #if `TERMPADDING' > 0
-	Identify f(x?) = f(x)*g((x+y)^`TERMPADDING');
+*	Pre-compute the padding, this is much faster than doing it per-term.
+	#$pad = g((`NTERMS'+y)^`TERMPADDING');
+	Multiply $pad;
 #endif
 .sort
 #printtimes

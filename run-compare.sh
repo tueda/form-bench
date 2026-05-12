@@ -95,9 +95,9 @@ runs["fmft"]=$((      N * 3  ))
 runs["mbox1l"]=$((    N * 8  ))
 runs["color"]=$((     N * 8  ))
 runs["chromatic"]=$(( N * 2  ))
-runs["sort-large"]=$((N * 2  ))
-runs["sort-small"]=$((N * 15 ))
-runs["sort-disk"]=$(( N * 2  ))
+runs["sort-large"]=$((N * 5  ))
+runs["sort-small"]=$((N * 20 ))
+runs["sort-disk"]=$(( N * 3  ))
 
 # A warmup run helps to get stable times from very short-running tests.
 declare -A warmup
