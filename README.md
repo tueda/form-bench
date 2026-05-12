@@ -12,3 +12,4 @@ Tests in this repository use code from the following sources:
 | `hyperform` | [inspirehep](https://inspirehep.net/literature/3086305) [code](https://github.com/adamkardos/HyperFORM) |
 | `minceex` | [code](https://www.nikhef.nl/~form/maindir/packages/mincer/mincer.html) |
 | `mincer` | [doi](https://doi.org/10.1016/0010-4655(89)90134-3) [inspirehep](https://inspirehep.net/literature/30575) [code](https://www.nikhef.nl/~form/maindir/packages/mincer/mincer.html) |
+| `mzv-dm` | [doi](https://doi.org/10.1016/j.cpc.2009.11.007) [code](https://www.nikhef.nl/~form/datamine/alternating/rational/alldepth/alldepth.html) |

@@ -33,8 +33,8 @@ tform-test -w20,\
 tform-test -w24\
 "
 
-#TESTS="chromatic color fmft forcer forcer-exp hyperform mass-fact mbox1l minceex mincer sort-disk sort-large sort-small trace"
-TESTS="chromatic color fmft forcer forcer-exp hyperform mbox1l minceex mincer sort-disk sort-large sort-small trace"
+#TESTS="chromatic color fmft forcer forcer-exp hyperform mass-fact mbox1l minceex mincer mzv-dm sort-disk sort-large sort-small trace"
+TESTS="chromatic color fmft forcer forcer-exp hyperform mbox1l minceex mincer mzv-dm sort-disk sort-large sort-small trace"
 
 # Number of times to run test batches:
 N=1
@@ -99,6 +99,7 @@ runs["sort-large"]=$((N * 5  ))
 runs["sort-small"]=$((N * 20 ))
 runs["sort-disk"]=$(( N * 3  ))
 runs["hyperform"]=$(( N * 4  ))
+runs["mzv-dm"]=$((    N * 6  ))
 
 # A warmup run helps to get stable times from very short-running tests.
 declare -A warmup
@@ -116,6 +117,7 @@ warmup["sort-large"]=0
 warmup["sort-small"]=1
 warmup["sort-disk"]=0
 warmup["hyperform"]=0
+warmup["mzv-dm"]=0
 
 ###############################################################################
 
