@@ -11,37 +11,37 @@ trap 'echo Cleaning up ; rm -rf $TESTDIR $ORIGDIR/output/$TIMESTAMP' ERR
 # counts.
 
 
-# Configurable parameters: set their default values and then re-set with args
+# Configurable parameters: set their default values and then re-set with user args
 
-LABEL="scaling-test"
-TESTDIRBASE="/dev/shm/"
+# The output directory will be called $LABEL-$TIMESTAMP
+LABEL="run-label"
 TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
-# Negative nice can lead to more consistent timings if the user has permission.
+
+# The tests will be run from here. Using a tmpfs (eg, /dev/shm or perhaps /tmp)
+# removes disk-access performance effects from the timings.
+TESTDIRBASE="$TMP"
+
+# Negative nice can lead to more consistent timings, if the user has permission.
 NICE=0
 
+# Comma-separated list of FORM commands to test:
 FORM_CMDS="\
-form-test,\
-tform-test -w1,\
-tform-test -w2,\
-tform-test -w4,\
-tform-test -w6,\
-tform-test -w8,\
-tform-test -w10,\
-tform-test -w12,\
-tform-test -w16,\
-tform-test -w20,\
-tform-test -w24\
+tform-5.0.0 -w8\
+,tform-master -w8\
 "
 
-#TESTS="chromatic color fmft forcer forcer-exp hyperform mass-fact mbox1l minceex mincer mzv-dm sort-disk sort-large sort-small trace"
+# All current tests
 TESTS="chromatic color fmft forcer forcer-exp hyperform mbox1l minceex mincer mzv-dm sort-disk sort-large sort-small trace"
 
-# Number of times to run test batches:
+# Number of times to run test batches. Running more times leads to more reliable
+# timing statistics, but increases total test run time.
 N=1
 
 # Run a harder version of the tests? Not all tests are affected by this.
 DIFFICULTY=1
 
+
+# Now check for non-default options from the user:
 
 options=$(getopt -o "" -l "label:,testdir:,timestamp:,nice:,form_cmds:,tests:,runs:,difficulty:" -- "$@")
 if [ $? -ne 0 ]; then
@@ -63,7 +63,7 @@ do
 		*) echo "Error, invalid option: $1" ;;
 	esac
 done
-# this variable needs to be available within form scripts:
+# This variable needs to be available within form scripts:
 export DIFFICULTY
 
 echo "form-bench: $(git rev-parse HEAD)"
@@ -79,48 +79,16 @@ echo "	DIFFICULTY = $DIFFICULTY"
 
 ###############################################################################
 
-
-# For reference, a 7900X with tform -w24 takes about N*30m to run through all
-# DIFFICULTY=1 tests with two binaries, and form takes about N*6hr.
-# This is quite a long time, but we want tests that are representative of
-# real-world use.
+# Load test run and warmup counts:
 declare -A runs
-runs["trace"]=$((     N * 30 ))
-runs["mincer"]=$((    N * 2  ))
-runs["minceex"]=$((   N * 3  ))
-runs["mass-fact"]=$(( N * 2  ))
-runs["forcer"]=$((    N * 2  ))
-runs["forcer-exp"]=$((N * 2  ))
-runs["fmft"]=$((      N * 3  ))
-runs["mbox1l"]=$((    N * 8  ))
-runs["color"]=$((     N * 8  ))
-runs["chromatic"]=$(( N * 2  ))
-runs["sort-large"]=$((N * 5  ))
-runs["sort-small"]=$((N * 20 ))
-runs["sort-disk"]=$(( N * 3  ))
-runs["hyperform"]=$(( N * 4  ))
-runs["mzv-dm"]=$((    N * 6  ))
-
-# A warmup run helps to get stable times from very short-running tests.
 declare -A warmup
-warmup["trace"]=1
-warmup["mincer"]=0
-warmup["minceex"]=0
-warmup["mass-fact"]=0
-warmup["forcer"]=0
-warmup["forcer-exp"]=0
-warmup["fmft"]=0
-warmup["mbox1l"]=0
-warmup["color"]=0
-warmup["chromatic"]=0
-warmup["sort-large"]=0
-warmup["sort-small"]=1
-warmup["sort-disk"]=0
-warmup["hyperform"]=0
-warmup["mzv-dm"]=0
-
-###############################################################################
-
+for test in $TESTS; do
+	if [ ! -d tests/$test ]; then
+		echo "Error, invalid test: $test"
+		exit 1
+	fi
+	source tests/$test/conf.sh
+done
 
 # Check for python and hyperfine:
 for bin in hyperfine python; do
