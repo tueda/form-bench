@@ -1,2 +1,2 @@
-runs["forcer"]=$((N * 2))
-warmup["forcer"]=0
+runs=2
+warmup=0

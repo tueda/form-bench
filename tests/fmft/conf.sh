@@ -1,2 +1,2 @@
-runs["fmft"]=$((N * 2))
-warmup["fmft"]=0
+runs=2
+warmup=0

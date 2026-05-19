@@ -1,2 +1,2 @@
-runs["chromatic"]=$((N * 2))
-warmup["chromatic"]=0
+runs=2
+warmup=0

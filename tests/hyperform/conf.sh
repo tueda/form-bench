@@ -1,2 +1,2 @@
-runs["hyperform"]=$((N * 4))
-warmup["hyperform"]=0
+runs=4
+warmup=0

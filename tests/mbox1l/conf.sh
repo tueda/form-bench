@@ -1,2 +1,2 @@
-runs["mbox1l"]=$((N * 8))
-warmup["mbox1l"]=0
+runs=8
+warmup=0

@@ -1,2 +1,2 @@
-runs["trace"]=$((N * 20))
-warmup["trace"]=1
+runs=20
+warmup=1

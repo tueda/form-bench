@@ -1,2 +1,2 @@
-runs["color"]=$((N * 8))
-warmup["color"]=0
+runs=8
+warmup=0

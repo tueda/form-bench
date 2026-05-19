@@ -1,2 +1,2 @@
-runs["sort-disk"]=$((N * 3))
-warmup["sort-disk"]=0
+runs=3
+warmup=0

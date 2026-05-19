@@ -1,6 +1,6 @@
 #!/bin/bash
 set -eE
-trap 'echo Cleaning up ; rm -rf $TESTDIR $ORIGDIR/output/$TIMESTAMP' ERR
+trap 'echo Cleaning up ; rm -rf "$TESTDIR" "$ORIGDIR/output/$LABEL-$TIMESTAMP"' ERR
 
 
 ###############################################################################
@@ -19,7 +19,7 @@ TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
 
 # The tests will be run from here. Using a tmpfs (eg, /dev/shm or perhaps /tmp)
 # removes disk-access performance effects from the timings.
-TESTDIRBASE="$TMP"
+TESTDIRBASE="${TMPDIR:-/tmp}"
 
 # Negative nice can lead to more consistent timings, if the user has permission.
 NICE=0
@@ -42,25 +42,18 @@ DIFFICULTY=1
 
 
 # Now check for non-default options from the user:
-
-options=$(getopt -o "" -l "label:,testdir:,timestamp:,nice:,form_cmds:,tests:,runs:,difficulty:" -- "$@")
-if [ $? -ne 0 ]; then
-	echo "Error, invalid argument in $@"
-fi
-eval set -- $options
-while :
-do
+while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--label)      LABEL="$2"; shift 2 ;;
 		--testdir)    TESTDIRBASE="$2"; shift 2 ;;
 		--timestamp)  TIMESTAMP="$2"; shift 2 ;;
 		--nice)       NICE="$2"; shift 2 ;;
 		--form_cmds)  FORM_CMDS="$2"; shift 2 ;;
-		--tests)      TESTS=$(echo "$2" | sed 's/,/ /g'); shift 2 ;;
+		--tests)      TESTS=${2//,/ }; shift 2 ;;
 		--runs)       N="$2"; shift 2 ;;
 		--difficulty) DIFFICULTY="$2"; shift 2 ;;
 		--) shift; break ;;
-		*) echo "Error, invalid option: $1" ;;
+		*) echo "Error, invalid option: $1"; exit 1 ;;
 	esac
 done
 # This variable needs to be available within form scripts:
@@ -80,18 +73,23 @@ echo "	DIFFICULTY = $DIFFICULTY"
 ###############################################################################
 
 # Load test run and warmup counts:
-declare -A runs
-declare -A warmup
+tests_list=()
+runs_list=()
+warmup_list=()
 for test in $TESTS; do
-	if [ ! -d tests/$test ]; then
+	if [ ! -d "tests/$test" ]; then
 		echo "Error, invalid test: $test"
 		exit 1
 	fi
-	source tests/$test/conf.sh
+
+	source "tests/$test/conf.sh"
+	tests_list+=("$test")
+	runs_list+=("$((N * runs))")
+	warmup_list+=("$warmup")
 done
 
-# Check for python and hyperfine:
-for bin in hyperfine python; do
+# Check for python3 and hyperfine:
+for bin in hyperfine python3; do
 	if ! command -v "$bin" &> /dev/null; then
 		echo "Error, script requires $bin"
 		exit 1
@@ -99,7 +97,7 @@ for bin in hyperfine python; do
 done
 
 # Check for the specified FORM binaries:
-for form in $(echo "$FORM_CMDS" | sed -e 's/ -w[0-9]\+//g' -e's/,/ /g'); do
+for form in $(echo "$FORM_CMDS" | sed -E -e 's/ -w[0-9]+//g' -e 's/,/ /g'); do
 	if ! command -v "$form" &> /dev/null; then
 		echo "Error, script requires $form"
 		exit 1
@@ -124,13 +122,18 @@ cp -r "$ORIGDIR"/tests/* "$TESTDIR"
 cd "$TESTDIR"
 
 
-for test in $TESTS; do
+for i in "${!tests_list[@]}"; do
+	test="${tests_list[$i]}"
+	run_count="${runs_list[$i]}"
+	warmup_count="${warmup_list[$i]}"
 	(
 	cd "$test"
 	echo ""
 	echo ""
 	echo Running "$test"
-	hyperfine --warmup "${warmup[$test]}" --runs "${runs[$test]}" \
+	hyperfine \
+		--warmup "$warmup_count" \
+		--runs "$run_count" \
 		--export-json "$RESULTSDIR/results-$test.json" \
 		--export-markdown "$RESULTSDIR/table-$test.md" \
 		--parameter-list form "$FORM_CMDS" \
@@ -138,7 +141,7 @@ for test in $TESTS; do
 		"nice -n $NICE {form} $test.frm > $LOGDIR/$test.log"
 	)
 done
-python "$ORIGDIR/scripts/plot-compare.py" "$RESULTSDIR"
+python3 "$ORIGDIR/scripts/plot-compare.py" "$RESULTSDIR"
 
 # Clean up
 cd "$ORIGDIR"

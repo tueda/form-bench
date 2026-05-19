@@ -1,2 +1,2 @@
-runs["sort-small"]=$((N * 20))
-warmup["sort-small"]=1
+runs=20
+warmup=1

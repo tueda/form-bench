@@ -1,2 +1,2 @@
-runs["mzv-dm"]=$((N * 6))
-warmup["mzv-dm"]=0
+runs=6
+warmup=0
