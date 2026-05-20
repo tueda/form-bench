@@ -1,6 +1,6 @@
 #!/bin/bash
 set -eE
-trap 'echo Cleaning up ; rm -rf $TESTDIR $ORIGDIR/output/$TIMESTAMP' ERR
+trap 'echo Cleaning up ; rm -rf "$TESTDIR" "$ORIGDIR/output/$RUN_ID-$LABEL-$TIMESTAMP"' ERR
 
 
 ###############################################################################
@@ -10,77 +10,36 @@ trap 'echo Cleaning up ; rm -rf $TESTDIR $ORIGDIR/output/$TIMESTAMP' ERR
 # Parallel scaling can be checked by using the same binary with multiple worker
 # counts.
 
-# Configurable parameters:
 
-LABEL="scaling-test-"
-TESTDIRBASE="/dev/shm/"
-# Negative nice can lead to more consistent timings.
-NICE=-10
+# Configurable parameters: set their default values and then re-set with user args
 
+# The output directory will be called $RUN_ID-$LABEL-$TIMESTAMP
+LABEL="scaling-test"
+TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
+
+# The tests will be run from here. Using a tmpfs (eg, /dev/shm or perhaps /tmp)
+# removes disk-access performance effects from the timings.
+TESTDIRBASE="${TMPDIR:-/tmp}"
+
+# Negative nice can lead to more consistent timings, if the user has permission.
+NICE=0
+
+# Comma-separated list of FORM commands to test:
 FORM_CMDS="\
-form-test,\
-tform-test -w1,\
-tform-test -w2,\
-tform-test -w4,\
-tform-test -w6,\
-tform-test -w8,\
-tform-test -w10,\
-tform-test -w12,\
-tform-test -w16,\
-tform-test -w20,\
-tform-test -w24\
+tform-5.0.0 -w8\
+,tform-master -w8\
 "
 
-#TESTS="trace mincer minceex mass-fact forcer forcer-exp fmft mbox1l color chromatic sort-small sort-large sort-disk"
-TESTS="trace mincer minceex forcer forcer-exp fmft mbox1l color chromatic sort-small sort-large sort-disk"
+# All current tests
+TESTS="chromatic color fmft forcer forcer-exp hyperform mbox1l minceex mincer mzv-dm sort-disk sort-large sort-small trace"
 
-# Number of times to run test batches:
+# Number of times to run test batches. Running more times leads to more reliable
+# timing statistics, but increases total test run time.
 N=1
 
 # Run a harder version of the tests? Not all tests are affected by this.
-export DIFFICULTY=1
+DIFFICULTY=1
 
-###############################################################################
-
-
-# For reference, a 7900X with tform -w24 takes about N*30m to run through all
-# DIFFICULTY=1 tests with two binaries, and form takes about N*6hr.
-# This is quite a long time, but we want tests that are representative of
-# real-world use.
-declare -A runs
-runs["trace"]=$((     N * 30 ))
-runs["mincer"]=$((    N * 2  ))
-runs["minceex"]=$((   N * 3  ))
-runs["mass-fact"]=$(( N * 2  ))
-runs["forcer"]=$((    N * 2  ))
-runs["forcer-exp"]=$((N * 2  ))
-runs["fmft"]=$((      N * 3  ))
-runs["mbox1l"]=$((    N * 8  ))
-runs["color"]=$((     N * 8  ))
-runs["chromatic"]=$(( N * 2  ))
-runs["sort-large"]=$((N * 2  ))
-runs["sort-small"]=$((N * 15 ))
-runs["sort-disk"]=$(( N * 2  ))
-
-# A warmup run helps to get stable times from very short-running tests.
-declare -A warmup
-warmup["trace"]=1
-warmup["mincer"]=0
-warmup["minceex"]=0
-warmup["mass-fact"]=0
-warmup["forcer"]=0
-warmup["forcer-exp"]=0
-warmup["fmft"]=0
-warmup["mbox1l"]=0
-warmup["color"]=0
-warmup["chromatic"]=0
-warmup["sort-large"]=0
-warmup["sort-small"]=1
-warmup["sort-disk"]=0
-
-###############################################################################
-
-# If command-line arguments are passed, parse them and override the settings.
 
 error() {
 	echo "error: $*" >&2
@@ -115,10 +74,11 @@ cmd_max_n=
 cmd_interleave=
 cmd_form_tmp=
 cmd_form_tmp_sort=
-cmd_verbose=
 cmd_tests=()
 cmd_args=()
 
+
+# Now check for non-default options from the user:
 while [[ $# -gt 0 ]]; do
 	case $1 in
 		-n)
@@ -140,9 +100,14 @@ while [[ $# -gt 0 ]]; do
 			cmd_interleave=1
 			shift
 			;;
+		--runs)
+			require_positive_int_arg "$@"
+			N=$2
+			shift 2
+			;;
 		--difficulty)
 			require_positive_int_arg "$@"
-			export DIFFICULTY=$2
+			DIFFICULTY=$2
 			shift 2
 			;;
 		--label)
@@ -150,12 +115,17 @@ while [[ $# -gt 0 ]]; do
 			LABEL=$2
 			shift 2
 			;;
+		--timestamp)
+			require_arg "$@"
+			TIMESTAMP=$2
+			shift 2
+			;;
 		--nice)
 			require_int_arg "$@"
 			NICE=$2
 			shift 2
 			;;
-		--test-dir-base)
+		--testdir|--test-dir-base)
 			require_arg "$@"
 			TESTDIRBASE=$2
 			shift 2
@@ -171,16 +141,31 @@ while [[ $# -gt 0 ]]; do
 			shift 2
 			;;
 		-v|--verbose)
-			cmd_verbose=1
+			# for compatibility
 			shift
+			;;
+		--form_cmds)
+			require_arg "$@"
+			FORM_CMDS=$2
+			shift 2
 			;;
 		-t|--test)
 			require_arg "$@"
-			cmd_tests+=("$2")
+			IFS=, read -r -a tmp_tests <<<"$2"
+			for tmp_test in "${tmp_tests[@]}"; do
+				if [[ -n $tmp_test ]]; then
+					cmd_tests+=("$tmp_test")
+				fi
+			done
 			shift 2
 			;;
+		--)
+			shift
+			cmd_args+=("$@")
+			break
+			;;
 		-*)
-			error "unknown option: $1"
+			error "invalid option: $1"
 			;;
 		*)
 			cmd_args+=("$1")
@@ -193,33 +178,54 @@ if (( ${#cmd_tests[@]} > 0 )); then
 	TESTS="${cmd_tests[*]}"
 fi
 
+if (( ${#cmd_args[@]} > 0 )); then
+	FORM_CMDS=$(IFS=','; echo "${cmd_args[*]}")
+fi
+
+# This variable needs to be available within form scripts:
+export DIFFICULTY
+
+echo "form-bench: $(git rev-parse HEAD)"
+echo "	LABEL      = $LABEL"
+echo "	TESTDIR    = $TESTDIRBASE"
+echo "	TIMESTAMP  = $TIMESTAMP"
+echo "	NICE       = $NICE"
+echo "	N          = $N"
+echo "	DIFFICULTY = $DIFFICULTY"
+
+# Load test run and warmup counts:
+tests_list=()
+runs_list=()
+warmup_list=()
 for test in $TESTS; do
-	if [[ -z ${runs[$test]} ]]; then
-		runs[$test]=$(( N * 2 ))
+	if [ ! -d "tests/$test" ]; then
+		error "invalid test: $test"
 	fi
-	if [[ -z ${warmup[$test]} ]]; then
-		warmup[$test]=0
-	fi
+
+	source "tests/$test/conf.sh"
+	tests_list+=("$test")
+	runs_list+=("$((N * runs))")
+	warmup_list+=("$warmup")
 done
 
 if [[ -n $cmd_n ]]; then
-	for i in "${!runs[@]}"; do
-		runs[$i]=$cmd_n
+	for i in "${!runs_list[@]}"; do
+		runs_list[$i]=$cmd_n
 	done
 fi
 
 if [[ -n $cmd_min_n ]]; then
-	for i in "${!runs[@]}"; do
-		if (( ${runs[$i]} < cmd_min_n )); then
-			runs[$i]=$cmd_min_n
+	for i in "${!runs_list[@]}"; do
+		if (( ${runs_list[$i]} < cmd_min_n )); then
+			runs_list[$i]=$cmd_min_n
 		fi
 	done
 fi
 
 if [[ -n $cmd_max_n ]]; then
-	for i in "${!runs[@]}"; do
-		if (( ${runs[$i]} > cmd_max_n )); then
-			runs[$i]=$cmd_max_n
+	for i in "${!runs_list[@]}"; do
+		if (( ${runs_list[$i]} > cmd_max_n )); then
+			runs_list[$i]=$cmd_max_n
 		fi
 	done
 fi
@@ -230,8 +236,8 @@ fi
 
 if [[ -n $cmd_interleave ]]; then
 	[[ -n $cmd_n ]] || error "--interleave option requires -n"
-	for i in "${!runs[@]}"; do
-		runs[$i]=1
+	for i in "${!runs_list[@]}"; do
+		runs_list[$i]=1
 	done
 	tmp_form_cmds=$FORM_CMDS
 	for ((i=1; i<cmd_n; i++)); do
@@ -239,32 +245,27 @@ if [[ -n $cmd_interleave ]]; then
 	done
 fi
 
-if [[ -n $cmd_verbose ]]; then
-	for t in $TESTS; do
-		echo "Test: $t: ${runs[$t]} runs (warmup: ${warmup[$t]})"
+for t in $TESTS; do
+	echo "Test: $t: ${runs_list[$t]} runs (warmup: ${warmup_list[$t]})"
+done
+(
+	IFS=,
+	for c in $FORM_CMDS; do
+		echo "Command: $c"
 	done
+)
 
-	(
-		IFS=,
-		for c in $FORM_CMDS; do
-			echo "Command: $c"
-		done
-	)
-fi
-
-# Check for python and hyperfine:
+# Check for python3 and hyperfine:
 for bin in hyperfine python3; do
 	if ! command -v "$bin" &> /dev/null; then
-		echo "Error, script requires $bin"
-		exit 1
+		error "script requires $bin"
 	fi
 done
 
 # Check for the specified FORM binaries:
-for form in $(echo "$FORM_CMDS" | sed -e 's/ -w[0-9]\+//g' -e's/,/ /g'); do
+for form in $(echo "$FORM_CMDS" | sed -E -e 's/ -w[0-9]+//g' -e 's/,/ /g'); do
 	if ! command -v "$form" &> /dev/null; then
-		echo "Error, script requires $form"
-		exit 1
+		error "script requires $form"
 	fi
 done
 
@@ -279,15 +280,14 @@ while :; do
 	RUN_NUMBER=$((RUN_NUMBER + 1))
 done
 
-TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
-RESULTSDIR="$ORIGDIR/output/$RUN_ID-$LABEL$TIMESTAMP/results/"
+RESULTSDIR="$ORIGDIR/output/$RUN_ID-$LABEL-$TIMESTAMP/results/"
 echo "Results: $RESULTSDIR"
-LOGDIR="$ORIGDIR/output/$RUN_ID-$LABEL$TIMESTAMP/logs/"
+LOGDIR="$ORIGDIR/output/$RUN_ID-$LABEL-$TIMESTAMP/logs/"
 mkdir -p "$RESULTSDIR"
 mkdir -p "$LOGDIR"
 
 TESTDIR="$TESTDIRBASE/form-bench-$TIMESTAMP/"
-mkdir "$TESTDIR"
+mkdir -p "$TESTDIR"
 
 TMPDIR=$TESTDIR/formtmp
 mkdir "$TMPDIR"
@@ -325,13 +325,18 @@ cd "$TESTDIR"
 	done
 )
 
-for test in $TESTS; do
+for i in "${!tests_list[@]}"; do
+	test="${tests_list[$i]}"
+	run_count="${runs_list[$i]}"
+	warmup_count="${warmup_list[$i]}"
 	(
 	cd "$test"
 	echo ""
 	echo ""
 	echo Running "$test"
-	hyperfine --warmup "${warmup[$test]}" --runs "${runs[$test]}" \
+	hyperfine \
+		--warmup "$warmup_count" \
+		--runs "$run_count" \
 		--export-json "$RESULTSDIR/results-$test.json" \
 		--export-markdown "$RESULTSDIR/table-$test.md" \
 		--parameter-list form "$FORM_CMDS" \
@@ -339,6 +344,7 @@ for test in $TESTS; do
 		"nice -n $NICE {form} $test.frm > $LOGDIR/$test.log"
 	)
 done
+
 # Skip plot-compare in interleaved mode because it fails for results generated
 # with --runs 1.
 if [[ -z $cmd_interleave ]]; then
