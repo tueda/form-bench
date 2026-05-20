@@ -5,6 +5,9 @@
         "python"
     ],
     "allowCompoundWords": true,
+    "ignorePaths": [
+        ".gitignore"
+    ],
     "words": [
         "floatfmt",
         "fmft",
