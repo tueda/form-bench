@@ -1,6 +1,6 @@
 #!/bin/bash
 set -eE
-trap 'echo Cleaning up ; rm -rf "$TESTDIR" "$ORIGDIR/output/$RUN_ID-$LABEL-$TIMESTAMP"' ERR
+trap 'echo Cleaning up ; rm -rf "$TESTDIR"' ERR
 
 
 ###############################################################################
@@ -31,7 +31,9 @@ tform-5.0.0 -w8\
 "
 
 # All current tests
-TESTS="chromatic color fmft forcer forcer-exp hyperform mbox1l minceex mincer mzv-dm sort-disk sort-large sort-small trace"
+TESTS="chromatic color fmft forcer forcer-exp hyperform \
+ibp-box2l ibp-mbox1l ibp-npbox2l ibp-nptri3l ibp-pent1l ibp-tri3l \
+minceex mincer mzv-dm sort-disk sort-large sort-small trace"
 
 # Number of times to run test batches. Running more times leads to more reliable
 # timing statistics, but increases total test run time.

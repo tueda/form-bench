@@ -15,7 +15,7 @@ Off threadstats;
 On totalsize;
 
 #ifndef `DIFFICULTY'
-	#define DIFFICULTY "3"
+	#define DIFFICULTY "1"
 #endif
 #if `DIFFICULTY' == 1
 	#define POW "7"
